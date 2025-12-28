@@ -12,7 +12,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "hook:test": "echo '{\"taskDescription\":\"Test task\"}' | node dist/hooks/claude-stop-handler.js"
+    "hook:test:stop": "echo '{\"session_id\":\"test-abc123\",\"transcript_path\":\"~/.claude/projects/test/transcript.jsonl\",\"permission_mode\":\"default\",\"hook_event_name\":\"Stop\",\"stop_hook_active\":false,\"cwd\":\"/home/sergio-gurillo/dev/agent-telegraph\"}' | node dist/presentation/handlers/claude-stop-handler.js",
+    "hook:test:notification": "echo '{\"session_id\":\"test-abc123\",\"transcript_path\":\"~/.claude/projects/test/transcript.jsonl\",\"cwd\":\"/home/sergio-gurillo/dev/agent-telegraph\",\"permission_mode\":\"default\",\"hook_event_name\":\"Notification\",\"message\":\"Claude is waiting for your input\",\"notification_type\":\"idle_prompt\"}' | node dist/presentation/handlers/claude-notification-handler.js",
+    "hook:test": "npm run hook:test:stop && npm run hook:test:notification"
   },
   "keywords": [
     "ai-agents",

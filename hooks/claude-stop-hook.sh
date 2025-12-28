@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Path to the hook handler
-HOOK_HANDLER="$PROJECT_DIR/dist/hooks/claude-stop-handler.js"
+HOOK_HANDLER="$PROJECT_DIR/dist/presentation/handlers/claude-stop-handler.js"
 
 # Check if the handler exists
 if [ ! -f "$HOOK_HANDLER" ]; then
