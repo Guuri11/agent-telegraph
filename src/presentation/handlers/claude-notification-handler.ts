@@ -6,10 +6,14 @@
  * It's particularly useful to detect when the agent is waiting for user input
  */
 
-import { ConfigLoader } from '../config/ConfigLoader';
-import { TelegramAdapter } from '../infrastructure/adapters/TelegramAdapter';
-import { AgentEventService } from '../domain/services/AgentEventService';
-import { AgentEventFactory } from '../domain/entities/AgentEvent';
+import { ConfigLoader } from '../../infrastructure/config/ConfigLoader';
+import { TelegramAdapter } from '../../infrastructure/adapters/TelegramAdapter';
+import { ProcessAgentEventUseCase } from '../../application/use-cases/ProcessAgentEventUseCase';
+import { EventFilterService } from '../../application/services/EventFilterService';
+import { TelegramMessageFormatter } from '../formatters/TelegramMessageFormatter';
+import { AgentEvent } from '../../domain/entities/AgentEvent';
+import { AgentName } from '../../domain/value-objects/AgentName';
+import { EventMetadata } from '../../domain/value-objects/EventMetadata';
 
 /**
  * Extracts the last meaningful message from a JSONL transcript
@@ -66,11 +70,11 @@ async function main() {
     // Load configuration
     const config = ConfigLoader.load();
 
-    // Create Telegram adapter
-    const telegram = new TelegramAdapter(config.telegram);
-
-    // Create event service
-    const eventService = new AgentEventService(telegram, config.agentFilters);
+    // Create dependencies (Clean Architecture layers)
+    const telegramAdapter = new TelegramAdapter(config.telegram);
+    const formatter = new TelegramMessageFormatter();
+    const processEventUseCase = new ProcessAgentEventUseCase(telegramAdapter, formatter);
+    const filterService = new EventFilterService(config.agentFilters);
 
     // Parse hook data
     const data = hookData ? JSON.parse(hookData) : {};
@@ -83,7 +87,7 @@ async function main() {
     // idle_prompt: Agent is waiting for user input
     // permission_prompt: Agent is waiting for permission
     const notificationTypes = ['idle_prompt', 'permission_prompt'];
-    
+
     if (!notificationTypes.includes(data.notification_type)) {
       console.log('[Hook] Notification type not configured for alerts, skipping');
       process.exit(0);
@@ -101,17 +105,26 @@ async function main() {
       }
     }
 
-    // Create and process notification event
-    const event = AgentEventFactory.createNotificationEvent(
-      'Claude Code',
-      data.message || 'Agent notification',
-      data.notification_type,
-      data.title,
-      data.cwd,
-      lastOutput
+    // Create event using domain entities and value objects
+    const event = AgentEvent.waitingForInput(
+      AgentName.create('Claude Code'),
+      EventMetadata.create({
+        message: data.message || 'Agent notification',
+        notificationType: data.notification_type,
+        title: data.title,
+        projectPath: data.cwd,
+        lastOutput
+      })
     );
 
-    await eventService.processEvent(event);
+    // Apply filters
+    if (!filterService.shouldProcess(event)) {
+      console.log('[Hook] Event filtered out, not sending notification');
+      process.exit(0);
+    }
+
+    // Process event through use case
+    await processEventUseCase.execute(event);
 
     console.log('[Hook] Notification sent successfully');
 

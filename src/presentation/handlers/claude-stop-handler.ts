@@ -5,10 +5,14 @@
  * This script is executed by the Claude Code hook when an agent stops
  */
 
-import { ConfigLoader } from '../config/ConfigLoader';
-import { TelegramAdapter } from '../infrastructure/adapters/TelegramAdapter';
-import { AgentEventService } from '../domain/services/AgentEventService';
-import { AgentEventFactory } from '../domain/entities/AgentEvent';
+import { ConfigLoader } from '../../infrastructure/config/ConfigLoader';
+import { TelegramAdapter } from '../../infrastructure/adapters/TelegramAdapter';
+import { ProcessAgentEventUseCase } from '../../application/use-cases/ProcessAgentEventUseCase';
+import { EventFilterService } from '../../application/services/EventFilterService';
+import { TelegramMessageFormatter } from '../formatters/TelegramMessageFormatter';
+import { AgentEvent } from '../../domain/entities/AgentEvent';
+import { AgentName } from '../../domain/value-objects/AgentName';
+import { EventMetadata } from '../../domain/value-objects/EventMetadata';
 
 async function main() {
   try {
@@ -20,11 +24,11 @@ async function main() {
     // Load configuration
     const config = ConfigLoader.load();
 
-    // Create Telegram adapter
-    const telegram = new TelegramAdapter(config.telegram);
-
-    // Create event service
-    const eventService = new AgentEventService(telegram, config.agentFilters);
+    // Create dependencies (Clean Architecture layers)
+    const telegramAdapter = new TelegramAdapter(config.telegram);
+    const formatter = new TelegramMessageFormatter();
+    const processEventUseCase = new ProcessAgentEventUseCase(telegramAdapter, formatter);
+    const filterService = new EventFilterService(config.agentFilters);
 
     // Parse hook data
     const data = hookData ? JSON.parse(hookData) : {};
@@ -38,14 +42,22 @@ async function main() {
       process.exit(0);
     }
 
-    // Create and process stop event
-    const event = AgentEventFactory.createStopEvent(
-      'Claude Code',
-      'Session completed',
-      undefined
+    // Create event using domain entities and value objects
+    const event = AgentEvent.agentStopped(
+      AgentName.create('Claude Code'),
+      EventMetadata.create({
+        taskDescription: 'Session completed'
+      })
     );
 
-    await eventService.processEvent(event);
+    // Apply filters
+    if (!filterService.shouldProcess(event)) {
+      console.log('[Hook] Event filtered out, not sending notification');
+      process.exit(0);
+    }
+
+    // Process event through use case
+    await processEventUseCase.execute(event);
 
     console.log('[Hook] Notification sent successfully');
 

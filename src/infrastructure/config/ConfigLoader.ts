@@ -1,17 +1,20 @@
 import * as dotenv from 'dotenv';
-import { EventFilter } from '../domain/services/AgentEventService';
+import { EventFilterCriteria } from '../../application/services/EventFilterService';
+import { EventType } from '../../domain/value-objects/EventType';
 
 // Load .env from custom path if specified (used by hooks from other projects)
 // Otherwise load from default location (.env in current directory)
 const envPath = process.env.NOTIFICATION_ENV_PATH;
 dotenv.config({ path: envPath });
 
+export interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+}
+
 export interface Config {
-  telegram: {
-    botToken: string;
-    chatId: string;
-  };
-  agentFilters?: EventFilter;
+  telegram: TelegramConfig;
+  agentFilters?: EventFilterCriteria;
 }
 
 export class ConfigLoader {
@@ -43,8 +46,8 @@ export class ConfigLoader {
     return config;
   }
 
-  private static loadAgentFilters(): EventFilter {
-    const filter: EventFilter = {};
+  private static loadAgentFilters(): EventFilterCriteria {
+    const filter: EventFilterCriteria = {};
 
     const filterAgents = process.env.FILTER_AGENT_NAMES;
     if (filterAgents !== undefined) {
@@ -53,11 +56,23 @@ export class ConfigLoader {
         : filterAgents.split(',').map(name => name.trim()).filter(name => name !== '');
     }
 
-    const filterEventTypes = process.env.FILTER_EVENT_TYPES;
-    if (filterEventTypes !== undefined) {
-      filter.eventTypes = filterEventTypes.trim() === ''
+    const filterEventTypesStr = process.env.FILTER_EVENT_TYPES;
+    if (filterEventTypesStr !== undefined) {
+      const typeStrings = filterEventTypesStr.trim() === ''
         ? []
-        : filterEventTypes.split(',').map(type => type.trim() as any).filter(type => type !== '');
+        : filterEventTypesStr.split(',').map(type => type.trim()).filter(type => type !== '');
+
+      // Convert string types to EventType value objects
+      filter.eventTypes = typeStrings
+        .map(typeStr => {
+          try {
+            return EventType.fromString(typeStr);
+          } catch {
+            console.warn(`Invalid event type in config: ${typeStr}`);
+            return null;
+          }
+        })
+        .filter((type): type is EventType => type !== null);
     }
 
     return filter;

@@ -1,5 +1,7 @@
 import { AgentMonitor, AgentEventHandler } from '../../domain/ports/AgentMonitor';
-import { AgentEventFactory } from '../../domain/entities/AgentEvent';
+import { AgentEvent } from '../../domain/entities/AgentEvent';
+import { AgentName } from '../../domain/value-objects/AgentName';
+import { EventMetadata } from '../../domain/value-objects/EventMetadata';
 
 /**
  * Extracts the last meaningful message from a JSONL transcript
@@ -78,10 +80,12 @@ export class ClaudeCodeHookAdapter implements AgentMonitor {
       ? Date.now() - this.startTime.getTime()
       : undefined;
 
-    const event = AgentEventFactory.createStopEvent(
-      'Claude Code',
-      hookData?.taskDescription,
-      duration
+    const event = AgentEvent.agentStopped(
+      AgentName.create('Claude Code'),
+      EventMetadata.create({
+        taskDescription: hookData?.taskDescription,
+        duration
+      })
     );
 
     await this.notifyHandlers(event);
@@ -98,9 +102,11 @@ export class ClaudeCodeHookAdapter implements AgentMonitor {
 
     this.startTime = new Date();
 
-    const event = AgentEventFactory.createStartEvent(
-      'Claude Code',
-      hookData?.taskDescription
+    const event = AgentEvent.agentStarted(
+      AgentName.create('Claude Code'),
+      EventMetadata.create({
+        taskDescription: hookData?.taskDescription
+      })
     );
 
     await this.notifyHandlers(event);
@@ -115,10 +121,12 @@ export class ClaudeCodeHookAdapter implements AgentMonitor {
       return;
     }
 
-    const event = AgentEventFactory.createToolUseEvent(
-      'Claude Code',
-      toolName,
-      metadata
+    const event = AgentEvent.toolUsed(
+      AgentName.create('Claude Code'),
+      EventMetadata.create({
+        toolName,
+        ...metadata
+      })
     );
 
     await this.notifyHandlers(event);
@@ -151,19 +159,21 @@ export class ClaudeCodeHookAdapter implements AgentMonitor {
       }
     }
 
-    const event = AgentEventFactory.createNotificationEvent(
-      'Claude Code',
-      message,
-      notificationType,
-      title,
-      projectPath,
-      lastOutput
+    const event = AgentEvent.waitingForInput(
+      AgentName.create('Claude Code'),
+      EventMetadata.create({
+        message,
+        notificationType,
+        title,
+        projectPath,
+        lastOutput
+      })
     );
 
     await this.notifyHandlers(event);
   }
 
-  private async notifyHandlers(event: any): Promise<void> {
+  private async notifyHandlers(event: AgentEvent): Promise<void> {
     for (const handler of this.handlers) {
       try {
         await handler(event);

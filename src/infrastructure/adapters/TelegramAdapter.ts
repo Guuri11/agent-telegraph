@@ -1,5 +1,5 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { EventNotifier } from '../../domain/services/AgentEventService';
+import { EventNotifier } from '../../domain/ports/EventNotifier';
 
 export interface TelegramConfig {
   botToken: string;

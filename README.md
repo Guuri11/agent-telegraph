@@ -7,7 +7,7 @@ Reenvía eventos de agentes de IA a Telegram en tiempo real. Ideal para monitore
 - ✅ Integración con hooks de Claude Code para notificaciones de tareas completadas
 - ✅ Envío automático a Telegram
 - ✅ Filtrado por nombre de agente y tipos de eventos
-- ✅ Arquitectura Hexagonal (Ports & Adapters)
+- ✅ Clean Architecture + DDD (Domain-Driven Design)
 - ✅ 100% TypeScript
 - ✅ Tests completos (TDD)
 - ✅ Extensible a otros agentes de IA
@@ -110,37 +110,59 @@ npm run test:coverage
 
 ## Arquitectura
 
-El proyecto sigue **Arquitectura Hexagonal** (Ports & Adapters) y **Test-Driven Development (TDD)**:
+El proyecto sigue **Clean Architecture** con **DDD (Domain-Driven Design)** y **TDD (Test-Driven Development)**:
 
 ```
 src/
-├── domain/                     # Lógica de negocio
+├── domain/                          # Capa de Dominio - Lógica de negocio pura
 │   ├── entities/
-│   │   └── AgentEvent.ts       # Entidad de eventos de agentes IA
-│   ├── ports/
-│   │   └── AgentMonitor.ts     # Puerto para monitores de agentes
+│   │   └── AgentEvent.ts            # Entity inmutable con invariantes
+│   ├── value-objects/
+│   │   ├── AgentName.ts             # Value Object para nombres de agentes
+│   │   ├── EventType.ts             # Value Object para tipos de eventos
+│   │   ├── EventTimestamp.ts        # Value Object para timestamps
+│   │   └── EventMetadata.ts         # Value Object para metadata
+│   └── ports/
+│       └── EventNotifier.ts         # Interface para notificaciones
+│
+├── application/                     # Capa de Aplicación - Casos de uso
+│   ├── use-cases/
+│   │   └── ProcessAgentEventUseCase.ts  # Orquesta el procesamiento de eventos
 │   └── services/
-│       └── AgentEventService.ts    # Servicio de eventos de agentes
-├── infrastructure/             # Adaptadores e infraestructura
-│   └── adapters/
-│       ├── TelegramAdapter.ts      # Adaptador de Telegram
-│       └── ClaudeCodeHookAdapter.ts # Adaptador de Claude Code
-├── hooks/                      # Hook handlers
-│   ├── claude-stop-handler.ts  # Handler de eventos stop de Claude
-│   └── claude-notification-handler.ts  # Handler de notificaciones de Claude
-├── config/                     # Configuración
-│   └── ConfigLoader.ts
-└── index.ts                    # Punto de entrada
+│       └── EventFilterService.ts    # Servicio de filtrado de eventos
+│
+├── infrastructure/                  # Capa de Infraestructura - Detalles técnicos
+│   ├── adapters/
+│   │   └── TelegramAdapter.ts       # Adaptador de Telegram (implementa EventNotifier)
+│   └── config/
+│       └── ConfigLoader.ts          # Configuración de la aplicación
+│
+├── presentation/                    # Capa de Presentación - UI/Formateo
+│   ├── formatters/
+│   │   └── TelegramMessageFormatter.ts  # Formatea eventos para Telegram
+│   └── handlers/
+│       ├── claude-stop-handler.ts   # Handler de eventos stop de Claude
+│       └── claude-notification-handler.ts  # Handler de notificaciones de Claude
+│
+└── index.ts                         # Punto de entrada de la aplicación
 ```
 
-### Capas
+### Principios Aplicados
 
-1. **Dominio**: Lógica de negocio pura, sin dependencias externas
-2. **Puertos**: Interfaces que definen contratos
-3. **Adaptadores**: Implementaciones específicas (Telegram, DBus, Claude Code)
-4. **Aplicación**: Orquesta el dominio y la infraestructura
+1. **Clean Architecture**: Separación estricta de capas con dependencias apuntando hacia el dominio
+2. **DDD**:
+   - Value Objects inmutables (AgentName, EventType, EventTimestamp, EventMetadata)
+   - Entities con invariantes (AgentEvent)
+   - Ubiquitous Language en nombres
+3. **TDD**: 144 tests unitarios (100% de cobertura en domain y application)
+4. **SOLID**: Dependency Inversion, Single Responsibility, etc.
+5. **Inmutabilidad**: Todos los objetos del dominio son inmutables y thread-safe
 
-Esta arquitectura permite agregar fácilmente soporte para otros agentes de IA sin modificar el dominio.
+Esta arquitectura permite:
+- Cambiar implementaciones sin afectar el dominio (ej: cambiar Telegram por otro servicio)
+- Testear lógica de negocio sin dependencias externas
+- Agregar nuevos agentes IA sin modificar el core
+- Mantener el código limpio y mantenible a largo plazo
 
 ## Ejemplos de Notificaciones
 

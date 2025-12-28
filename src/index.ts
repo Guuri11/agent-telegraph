@@ -1,4 +1,4 @@
-import { ConfigLoader } from './config/ConfigLoader';
+import { ConfigLoader } from './infrastructure/config/ConfigLoader';
 import { TelegramAdapter } from './infrastructure/adapters/TelegramAdapter';
 
 class Application {

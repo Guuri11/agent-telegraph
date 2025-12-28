@@ -6,90 +6,115 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Agent Telegraph** is a TypeScript application that forwards AI agent events to Telegram in real-time. It integrates with Claude Code via hooks.
 
-## Development Commands
-
-### Build & Run
-```bash
-npm run build              # Compile TypeScript to JavaScript
-npm run build:hooks        # Compile and make hook scripts executable
-npm start                  # Run compiled application (keeps service alive for hooks)
-npm run dev                # Run in development mode with ts-node
-```
-
-### Testing
-```bash
-npm test                   # Run all tests
-npm run test:watch         # Run tests in watch mode
-npm run test:coverage      # Generate coverage report
-npm run hook:test          # Test Claude Code hook manually
-```
-
-### Running Single Tests
-Use Jest's pattern matching to run specific tests:
-```bash
-npx jest AgentEventService.test.ts             # Run specific test file
-npx jest -t "should process event"             # Run tests matching name
-npx jest src/domain/services                   # Run tests in directory
-```
-
 ## Architecture
 
-The project follows **Hexagonal Architecture** (Ports & Adapters) with strict layer separation:
+The project follows **Clean Architecture** with **Domain-Driven Design (DDD)** principles and strict **Test-Driven Development (TDD)**.
+
+### Core Principles
+
+1. **Clean Architecture**: Dependencies flow inward toward the domain
+2. **DDD**: Value Objects, Entities, Ubiquitous Language
+3. **Immutability**: All domain objects are immutable and frozen
+4. **TDD**: Tests are written first, then implementation (Red-Green-Refactor)
+5. **No Invalid States**: Validation in constructors prevents invalid objects
 
 ### Layer Structure
 
 **Domain Layer** (`src/domain/`):
-- Pure business logic with no external dependencies
-- `entities/`: Core domain objects (AgentEvent)
-- `ports/`: Interfaces defining contracts (AgentMonitor)
-- `services/`: Business logic services (AgentEventService)
+- **Pure business logic** with ZERO external dependencies
+- `entities/`: Immutable entities with invariantes (AgentEvent)
+- `value-objects/`: Immutable value objects (AgentName, EventType, EventTimestamp, EventMetadata)
+- `ports/`: Interfaces for external dependencies (EventNotifier)
+
+**Application Layer** (`src/application/`):
+- **Use Cases** that orchestrate business logic
+- `use-cases/`: Application-specific business rules (ProcessAgentEventUseCase)
+- `services/`: Application services (EventFilterService)
 
 **Infrastructure Layer** (`src/infrastructure/`):
-- External integrations and implementations
-- `adapters/`: Implementations of domain ports
-  - `TelegramAdapter`: Telegram bot integration
-  - `ClaudeCodeHookAdapter`: Claude Code hook integration
+- **External integrations** and technical details
+- `adapters/`: Implementations of domain ports (TelegramAdapter)
+- `config/`: Configuration management (ConfigLoader)
 
-**Application Layer**:
-- `index.ts`: Main entry point that keeps service alive for agent hooks
-- `config/ConfigLoader.ts`: Environment configuration management
-- `hooks/`: Hook handlers for AI agent integration
-  - `claude-stop-handler.ts`: Handles Claude Code stop events
-  - `claude-notification-handler.ts`: Handles Claude Code notifications
+**Presentation Layer** (`src/presentation/`):
+- **UI and formatting** concerns
+- `formatters/`: Message formatting (TelegramMessageFormatter)
+- `handlers/`: Hook handlers for AI agents (claude-stop-handler, claude-notification-handler)
 
-### Key Design Patterns
+### Development Commands
 
-**Dependency Inversion**: Domain services depend on interfaces (ports), not concrete implementations. For example, `AgentEventService` accepts any `EventNotifier`, not specifically `TelegramAdapter`.
+```bash
+npm run build              # Compile TypeScript
+npm run build:hooks        # Compile and make hooks executable
+npm start                  # Run compiled application
+npm run dev                # Run in development mode
 
-**Filtering Architecture**: Agent event filtering is optional and configured via environment variables:
-- Filters are optional (ENABLE_AGENT_FILTERS=true)
-- Services check filters before processing
-- Multiple filter criteria are combined with AND logic
+npm test                   # Run all tests (144 tests)
+npm run test:watch         # Run tests in watch mode
+npm run test:coverage      # Generate coverage report
 
-**Agent Event System**: The agent event system uses an enum-based event type system with factory methods for creating common events. This makes adding support for new AI agents straightforward without modifying domain logic.
+npx jest <file>            # Run specific test file
+npx jest -t "pattern"      # Run tests matching pattern
+```
 
-**Hook-based Integration**: The service stays alive to enable hooks from AI agents (Claude Code) to send events via Telegram. Hooks are executed independently and communicate via the shared Telegram adapter.
+## Development Workflow (TDD)
 
-## Configuration
+When adding new features or fixing bugs, ALWAYS follow TDD:
 
-Configuration is loaded from `.env` file (use `.env.example` as template):
+1. **Red**: Write a failing test first
+2. **Green**: Write minimal code to make it pass
+3. **Refactor**: Improve code while keeping tests green
 
-**Required**:
-- `TELEGRAM_BOT_TOKEN`: Telegram bot API token
-- `TELEGRAM_CHAT_ID`: Target chat ID for notifications
+### Example: Adding a New Value Object
 
-**Optional Agent Event Filters**:
-- `ENABLE_AGENT_FILTERS=true`: Enable agent event filtering
-- `FILTER_AGENT_NAMES`: Comma-separated agent names (e.g., "Claude Code")
-- `FILTER_EVENT_TYPES`: Comma-separated event types (agent_stopped, task_completed, etc.)
+```bash
+# 1. Write test first (RED)
+npx jest NewValueObject.test.ts  # Should fail
+
+# 2. Implement minimum code (GREEN)
+# ... implement NewValueObject ...
+npx jest NewValueObject.test.ts  # Should pass
+
+# 3. Refactor if needed
+```
+
+## Code Modification Rules
+
+### CRITICAL: Domain Layer Purity
+
+- **NEVER** import infrastructure or presentation in domain
+- **NEVER** use concrete implementations in domain (use ports/interfaces)
+- **NEVER** make domain objects mutable
+- **ALWAYS** validate in constructors (fail-fast)
+- **ALWAYS** use Value Objects instead of primitives
+
+### Adding New Features
+
+1. **Start with Domain**: Create/modify Value Objects and Entities
+2. **Add Use Case**: Create use case in application layer
+3. **Implement Adapter**: Add infrastructure implementation if needed
+4. **Add Presenter**: Add formatting in presentation layer
+5. **Wire Everything**: Update dependency injection in handlers/index.ts
+
+### Testing Strategy
+
+- **Domain**: 100% unit test coverage (no mocks needed)
+- **Application**: Unit tests with mocked dependencies
+- **Infrastructure**: Integration tests with real services (mocked external APIs)
+- **Presentation**: Unit tests for formatters
 
 ## Claude Code Integration
 
-This project includes hooks for Claude Code integration. When Claude Code completes a task, it can trigger a notification to Telegram.
+### Hook Locations
 
-### Setup Hook
-1. Build hooks: `npm run build:hooks`
-2. Add to `.claude/settings.local.json`:
+Hooks are in `src/presentation/handlers/`:
+- `claude-stop-handler.ts`: Triggered when Claude stops
+- `claude-notification-handler.ts`: Triggered on notifications (waiting for input)
+
+### Hook Configuration
+
+Add to `.claude/settings.local.json`:
+
 ```json
 {
   "hooks": {
@@ -102,42 +127,149 @@ This project includes hooks for Claude Code integration. When Claude Code comple
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/hooks/claude-notification-hook.sh"
+          }
+        ]
+      }
     ]
   }
 }
 ```
 
-### Hook Implementation
-- Hook handler: `src/hooks/claude-stop-handler.ts`
-- Shell wrapper: `hooks/claude-stop-hook.sh`
-- Receives JSON via stdin with task information
-- Creates AgentEvent and sends via TelegramAdapter
-
-See `CLAUDE_HOOKS.md` for detailed hook integration documentation.
-
 ## Adding Support for New AI Agents
 
-To add support for new AI agents, use a hook-based approach:
+To add a new AI agent (e.g., GPT-4, Gemini):
 
-1. Create adapter in `src/infrastructure/adapters/` implementing `AgentMonitor` interface
-2. Create hook scripts in `hooks/` directory
-3. Configure agent to call hooks
-4. Add configuration in `ConfigLoader` if needed
+1. **No domain changes needed!** AgentEvent already supports any agent
+2. Create handler in `src/presentation/handlers/`
+3. Create shell script wrapper in `hooks/`
+4. Use existing Use Cases and Value Objects
 
-The hook-based approach is simple and works with any agent that can call shell scripts. The domain layer (entities, services) requires no changes due to the port-adapter pattern.
+Example handler structure:
 
-## Test Strategy
+```typescript
+import { AgentEvent } from '../../domain/entities/AgentEvent';
+import { AgentName } from '../../domain/value-objects/AgentName';
+import { EventMetadata } from '../../domain/value-objects/EventMetadata';
+import { ProcessAgentEventUseCase } from '../../application/use-cases/ProcessAgentEventUseCase';
+// ... other imports
 
-The project uses Test-Driven Development (TDD):
+async function main() {
+  // 1. Load config
+  const config = ConfigLoader.load();
 
-- All domain logic has comprehensive unit tests
-- Tests are located in `__tests__` directories alongside source files
-- Jest configuration excludes test files from compilation
-- Test environment: Node.js
-- Coverage is tracked and reported in `coverage/` directory
+  // 2. Create dependencies (Clean Architecture)
+  const adapter = new TelegramAdapter(config.telegram);
+  const formatter = new TelegramMessageFormatter();
+  const useCase = new ProcessAgentEventUseCase(adapter, formatter);
+  const filterService = new EventFilterService(config.agentFilters);
 
-When modifying code:
-1. Run relevant tests first to understand current behavior
-2. Update tests to reflect new requirements
-3. Implement changes to make tests pass
-4. Verify full test suite passes before committing
+  // 3. Create event with Value Objects
+  const event = AgentEvent.agentStopped(
+    AgentName.create('New Agent Name'),
+    EventMetadata.create({ taskDescription: 'Task done' })
+  );
+
+  // 4. Filter and process
+  if (filterService.shouldProcess(event)) {
+    await useCase.execute(event);
+  }
+}
+```
+
+## Common Patterns
+
+### Creating AgentEvent
+
+```typescript
+// Using factory methods (recommended)
+const event = AgentEvent.agentStopped(
+  AgentName.create('Claude Code'),
+  EventMetadata.create({
+    taskDescription: 'Feature implemented',
+    duration: 5000
+  })
+);
+
+// Using create (for custom timestamps)
+const event = AgentEvent.create({
+  agentName: AgentName.create('Claude Code'),
+  eventType: EventType.agentStopped(),
+  timestamp: EventTimestamp.fromDate(customDate),
+  metadata: EventMetadata.create({})
+});
+```
+
+### Value Object Validation
+
+All Value Objects validate on creation:
+
+```typescript
+// Throws error if invalid
+const name = AgentName.create(''); // Error: name cannot be empty
+const type = EventType.fromString('invalid'); // Error: invalid type
+const timestamp = EventTimestamp.fromDate(futureDate); // Error: cannot be in future
+```
+
+### Immutability
+
+```typescript
+const event = AgentEvent.agentStarted(/* ... */);
+
+// This throws error (object is frozen)
+event.agentName = AgentName.create('Modified'); // Error!
+
+// Value Objects are also immutable
+const metadata = EventMetadata.create({ taskDescription: 'Task' });
+metadata.taskDescription = 'Modified'; // Error!
+```
+
+## Configuration
+
+`.env` file (use `.env.example` as template):
+
+**Required**:
+- `TELEGRAM_BOT_TOKEN`: Telegram bot API token
+- `TELEGRAM_CHAT_ID`: Target chat ID
+
+**Optional Filters**:
+- `ENABLE_AGENT_FILTERS=true`: Enable filtering
+- `FILTER_AGENT_NAMES`: Comma-separated agent names
+- `FILTER_EVENT_TYPES`: Comma-separated event types (agent_stopped, waiting_for_input, etc.)
+
+## When Modifying Code
+
+1. **Read tests first** to understand current behavior
+2. **Write test** for new behavior (TDD Red)
+3. **Implement** minimum code to pass (TDD Green)
+4. **Refactor** while keeping tests green
+5. **Run full suite**: `npm test`
+6. **Verify**: All 144+ tests should pass
+
+## Important Files
+
+- `src/domain/entities/AgentEvent.ts`: Core entity
+- `src/domain/value-objects/*.ts`: Value Objects (immutable)
+- `src/application/use-cases/ProcessAgentEventUseCase.ts`: Main use case
+- `src/presentation/formatters/TelegramMessageFormatter.ts`: Message formatting
+- `src/infrastructure/config/ConfigLoader.ts`: Configuration
+
+## Anti-Patterns to Avoid
+
+❌ **Don't**: Import infrastructure in domain
+❌ **Don't**: Use primitives in domain (use Value Objects)
+❌ **Don't**: Make domain objects mutable
+❌ **Don't**: Skip tests (always TDD)
+❌ **Don't**: Put business logic in presentation/infrastructure
+
+✅ **Do**: Keep domain pure
+✅ **Do**: Use Value Objects everywhere
+✅ **Do**: Make everything immutable
+✅ **Do**: Write tests first (TDD)
+✅ **Do**: Follow Clean Architecture layers

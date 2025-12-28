@@ -1,4 +1,5 @@
 import { ConfigLoader } from '../ConfigLoader';
+import { EventType } from '../../../domain/value-objects/EventType';
 
 describe('ConfigLoader', () => {
   const originalEnv = process.env;
@@ -49,7 +50,9 @@ describe('ConfigLoader', () => {
 
       expect(config.agentFilters).toBeDefined();
       expect(config.agentFilters?.agentNames).toEqual(['Claude Code']);
-      expect(config.agentFilters?.eventTypes).toEqual(['agent_stopped', 'waiting_for_input']);
+      expect(config.agentFilters?.eventTypes).toHaveLength(2);
+      expect(config.agentFilters?.eventTypes?.[0]).toEqual(EventType.agentStopped());
+      expect(config.agentFilters?.eventTypes?.[1]).toEqual(EventType.waitingForInput());
     });
 
     it('should not load agent filters when disabled', () => {
@@ -87,7 +90,9 @@ describe('ConfigLoader', () => {
       const config = ConfigLoader.load();
 
       expect(config.agentFilters?.agentNames).toEqual(['Claude Code', 'Agent Two']);
-      expect(config.agentFilters?.eventTypes).toEqual(['agent_stopped', 'waiting_for_input']);
+      expect(config.agentFilters?.eventTypes).toHaveLength(2);
+      expect(config.agentFilters?.eventTypes?.[0].equals(EventType.agentStopped())).toBe(true);
+      expect(config.agentFilters?.eventTypes?.[1].equals(EventType.waitingForInput())).toBe(true);
     });
   });
 });
